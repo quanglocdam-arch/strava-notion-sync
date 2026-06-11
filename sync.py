@@ -97,20 +97,22 @@ def clean_page_id(raw: str) -> str:
 
 
 def find_or_create_db() -> str:
-    """Find existing Strava Runs database or create one under NOTION_PAGE_ID."""
-    # Search workspace for the database by title
-    resp = requests.post(
-        f"{NOTION_API}/search",
+    """Find existing Strava Runs database inside parent page, or create one."""
+    page_id = clean_page_id(NOTION_PAGE_ID)
+
+    # Only look inside the specified parent page (not whole workspace)
+    resp = requests.get(
+        f"{NOTION_API}/blocks/{page_id}/children",
         headers=notion_headers(),
-        json={"query": DB_NAME, "filter": {"value": "database", "property": "object"}},
         timeout=15,
     )
-    resp.raise_for_status()
-    results = resp.json().get("results", [])
-    if results:
-        db_id = results[0]["id"]
-        print(f"  Found existing database: {db_id}")
-        return db_id
+    if resp.ok:
+        for child in resp.json().get("results", []):
+            if child.get("type") == "child_database":
+                if child.get("child_database", {}).get("title") == DB_NAME:
+                    db_id = child["id"]
+                    print(f"  Found existing database: {db_id}")
+                    return db_id
 
     # Create new database
     print(f"  Creating new database '{DB_NAME}'...")
